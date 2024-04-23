@@ -2,10 +2,10 @@ import logging.config
 import os
 import javaproperties
 
-from flask import Flask
+from flask import Flask, request
 from flask_socketio import SocketIO
 from global_variables import Globals
-from classifier_model import classifier_model
+from classifier_model import classifier_model, test_classifier
 
 # define the conf, data and log paths
 Globals.conf = os.path.dirname(os.path.realpath(__file__)).replace("bin", "conf")
@@ -20,15 +20,14 @@ Globals.socket_conn = socketapp = SocketIO(app)
 
 @app.get("/train")
 def model_status():
-    classifier_model()
-    return {"Classifier": "Trained"}
+    return classifier_model()
 
-@app.get("/get-test/{inputData}")
+@app.get("/get-test")
 def model_test_status():
-    return {"Classifier": "Tested"}
+    input_text = request.args.get("data")
+    return test_classifier(input_text)
 
 if __name__ == "__main__":
-
     try:
         # disable the info logs of sockets and web server
         logging.basicConfig(level=logging.WARNING)

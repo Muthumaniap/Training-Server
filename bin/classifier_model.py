@@ -12,7 +12,7 @@ logging = logging.getLogger()
 def load_data_from_json(file_path):
     try:
         logging.info("Loading data from JSON file: %s", file_path)
-        with open(r"C:\Mukesh\White Mastery\Training-Server\bin\training_data.json") as file:
+        with open(r"C:/Users/purushothaman/OneDrive/Documents/MyWork/training-server/bin/training_data.json") as file:
             data = json.load(file)
         return data
     except Exception as e:
@@ -107,26 +107,6 @@ def train_model(train_data):
         return None
 
 
-
-
-# Main function
-def main():
-    try:
-        logging.info("Starting program execution")
-        # Load and preprocess data
-        train_data, test_data, label_map = load_and_preprocess_data("./training_data.json")
-        if train_data is None or test_data is None or label_map is None:
-            return
-        # Train the model
-        model = train_model(train_data)
-        logging.info("Model training completed successfully")
-        if model is not None:
-            return {"Classifier":"Trained"}
-        else:
-            return {"Classifier":"Failed"}
-    except Exception as e:
-        logging.error("An error occurred: %s", e)
-
 def test_classifier(input_text: str):
     """
     Function to test a classifier model on a single input text.
@@ -152,12 +132,38 @@ def test_classifier(input_text: str):
         with torch.no_grad():
             outputs = model(**tokenized_text)
 
-        return {"Prediction":outputs}
+        # label_names = ["enquire", "confirm", "wrong number", "reschedule", "stop calling", "hold    call", "settlement options", 
+        #                "will not pay", "wrong information", "enquire legitimacy", "share details", "financial crisis", 
+        #                "raise dispute", "debt counselling", "paid already", "pay later", "pay now", "other options", 
+        #                "enquire amount", "non-monetary settlement", "explain debt", "escalation", "attorney", "meal plans", 
+        #                "vegetarian", "keto", "wholesome", "indian", "international", "arabic"]
+        
+        # predicted_label_index = torch.argmax(outputs.logits).item()
+        # predicted_label = label_names[predicted_label_index]
+
+        # logging.info("Predicted label: %s", predicted_label)
+
+        logging.info(outputs)
+
+        # return {"label":predicted_label}
 
     except Exception as err:
-        logging.expection(err)
+        logging.exception(err)
         return str(err)
 
-# Entry point of the program
-if __name__ == "__main__":
-    main()
+# Main function
+def classifier_model():
+    try:
+        logging.info("Model Started executing")
+        # Load and preprocess data
+        train_data, test_data, label_map = load_and_preprocess_data("./training_data.json")
+        if train_data is None or test_data is None or label_map is None:
+            return
+        # Train the model
+        train_model(train_data)
+        logging.info("Model training completed successfully")
+        return {"Classifier":"Trained"}
+              
+    except Exception as e:
+        logging.error("An error occurred: %s", e)
+        return {"Classifier":"Failed"}
