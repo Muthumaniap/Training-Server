@@ -122,7 +122,7 @@ if __name__ == "__main__":
    
 
     # Step 1: Read the JSON file
-    with open(r"C:\Mukesh\White Mastery\Training-Server\bin\training_data.json") as file:
+    with open(r".\training_data.json") as file:
         intents_data = json.load(file)
 
     # Step 2: Create label mappings
