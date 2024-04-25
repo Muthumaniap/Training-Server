@@ -1,169 +1,150 @@
-import json
+import string
+import random
 import torch
-import torch.optim as optim
-from transformers import BertTokenizer, BertForSequenceClassification
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler
+import json
+import warnings
 from sklearn.model_selection import train_test_split
-import logging.config
+from sklearn.metrics import accuracy_score
+from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoModelForSequenceClassification, pipeline
 
-logging = logging.getLogger()
+def create_label_mappings(intents_data):
+    id2labelname = {}
+    labelname2id = {}
+    for id, name in enumerate(intents_data.keys()):
+        id2labelname[id] = name
+        labelname2id[name] = id
+    return id2labelname, labelname2id
 
-# Function to load data from a JSON file
-def load_data_from_json(file_path):
-    try:
-        logging.info("Loading data from JSON file: %s", file_path)
-        with open(r"C:/Users/purushothaman/OneDrive/Documents/MyWork/training-server/bin/training_data.json") as file:
-            data = json.load(file)
-        return data
-    except Exception as e:
-        logging.error("Error loading data from JSON: %s", e)
-        return None
+def prepare_training_data(intents_data):
+    training_data = []
+    for label in intents_data:
+        for text in intents_data[label]:
+            training_data.append({"label": label, "text": text})
+    random.shuffle(training_data)
+    return training_data
 
-# Function to preprocess the loaded data
-def preprocess_data(data):
-    try:
-        logging.info("Preprocessing data")
-        texts = []
-        labels = []
-        # Iterate through the dictionary items (label, sentences)
-        for label, sentences in data.items():
-            for sentence in sentences:
-                texts.append(sentence)
-                labels.append(label)
-        return texts, labels
-    except Exception as e:
-        logging.error("Error preprocessing data: %s", e)
-        return None, None
-    
-# Function to load and preprocess data from JSON file
-def load_and_preprocess_data(file_path):
-    try:
-        logging.info("Loading and preprocessing data from JSON file: %s", file_path)
-        # Load data from JSON file
-        data = load_data_from_json(file_path)
-        if data is None:
-            return None, None, None
-        # Preprocess loaded data
-        texts, labels = preprocess_data(data)
-        if texts is None or labels is None:
-            return None, None, None
+def preprocess_texts_and_labels(training_data, labelname2id):
+    train_texts = []
+    train_labels = []
+    for entry in training_data:
+        train_texts.append(entry['text'].translate(str.maketrans('', '', string.punctuation)).lower())
+        train_labels.append(labelname2id[entry['label']])
+    return train_texts, train_labels
 
-        # Initialize BERT tokenizer
-        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        # Tokenize input texts
-        tokenized_texts = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+def prepare_test_data(intents_data, test_texts, test_labels):
+    label_names = list(intents_data.keys())
+    return label_names, test_texts, test_labels
 
-        # Create a label mapping dictionary
-        label_map = {label: i for i, label in enumerate(set(labels))}
-        # Convert labels to label IDs
-        label_ids = [label_map[label] for label in labels]
-        # Convert label IDs to tensor
-        label_tensor = torch.tensor(label_ids)
+def create_classification_dataset(encodings, labels):
+    class ClassificationDataset(torch.utils.data.Dataset):
+        def __init__(self, encodings, labels):
+            self.encodings = encodings
+            self.labels = labels
 
-        # Create a PyTorch dataset
-        dataset = TensorDataset(tokenized_texts["input_ids"], tokenized_texts["attention_mask"], label_tensor)
-        # Split dataset into training and testing sets
-        train_data, test_data = train_test_split(dataset, test_size=0.1, random_state=42)
-        
-        return train_data, test_data, label_map
-    except Exception as e:
-        logging.error("Error loading and preprocessing data: %s", e)
-        return None, None, None
+        def __getitem__(self, idx):
+            item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+            item['label'] = self.labels[idx]
+            return item
 
-# Function to train the BERT model
-def train_model(train_data):
-    try:
-        logging.info("Training model")
-        # Initialize the BERT model for sequence classification
-        model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=30)
+        def __len__(self):
+            return len(self.labels)
+    return ClassificationDataset(encodings, labels)
 
-        # Set device (CPU in this case)
-        device = torch.device("cpu")
-        model.to(device)
+def compute_metrics(pred):
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    acc = accuracy_score(labels, preds)
+    return {'accuracy': acc}
 
-        # Initialize AdamW optimizer
-        optimizer = optim.AdamW(model.parameters(), lr=2e-3)
+def fine_tune_models(intents_data, model_ids, train_texts, dev_texts, train_labels, dev_labels, test_texts, test_labels, id2labelname):
+    accuracies = []
+    for model_id in model_ids:
+        print(f"*** {model_id} ***")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, model_max_length=512)
+        model = AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=len(intents_data.keys()))
+        train_texts_encoded = tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
+        dev_texts_encoded = tokenizer(dev_texts, padding=True, truncation=True, return_tensors="pt")
+        test_texts_encoded = tokenizer(test_texts, padding=True, truncation=True, return_tensors="pt")
+        train_dataset = create_classification_dataset(train_texts_encoded, train_labels)
+        dev_dataset = create_classification_dataset(dev_texts_encoded, dev_labels)
+        test_dataset = create_classification_dataset(test_texts_encoded, test_labels)
+        training_args = TrainingArguments(
+            output_dir='./data/results/' + model_id, num_train_epochs=10, per_device_train_batch_size=16, per_device_eval_batch_size=64, warmup_steps=int(len(train_dataset) / 16), weight_decay=0.01, logging_dir='./logs/' + model_id,
+            evaluation_strategy="steps",
+            eval_steps=50,
+            save_steps=50,
+            save_total_limit=10,
+            load_best_model_at_end=True,
+            no_cuda=False
+        )
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            compute_metrics=compute_metrics,
+            train_dataset=train_dataset,
+            eval_dataset=dev_dataset,
+        )
+        trainer.train()
+        trainer.save_model('./data/models/' + model_id)
+        tokenizer.save_pretrained('./data/models/' + model_id)
+        test_results = trainer.evaluate(test_dataset)
+        accuracies.append(test_results["eval_accuracy"])
+        with open('./data/models/' + model_id + "/config.json", 'r') as config_file:
+            config = json.load(config_file)
+            config.update({"id2label": id2labelname})
+        with open('./data/models/' + model_id + "/config.json", 'w') as newconfig:
+            json.dump(config, newconfig, indent=4)
 
-        # Create a data loader for training data
-        train_loader = DataLoader(train_data, sampler=RandomSampler(train_data), batch_size=32)
+def classify_text_with_models(input_text, model_ids, label_names):
+    input_text = input_text.translate(str.maketrans('', '', string.punctuation)).lower()
+    context = label_names[6:]  # or select context1 based on the provided code
+    for model in model_ids:
+        print(model, " : ", end="\n")
+        pipe = pipeline("text-classification",
+                        model="./data/models/" + model,
+                        device='cpu',
+                        padding=True,
+                        truncation=True,
+                        top_k=None)
+        data = pipe(input_text)
+        for i in data[0]:
+            if i['label'] in context:
+                print(i)
+                break
 
-        # Set model to training mode
-        model.train()
-        # Train the model
-        for epoch in range(4):
-            for batch in train_loader:
-                batch = tuple(t.to(device) for t in batch)
-                inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[2]}
-                optimizer.zero_grad()
-                outputs = model(**inputs)
-                loss = outputs.loss
-                loss.backward()
-                optimizer.step()
+if __name__ == "__main__":
+    # # Your intents_data here
+    # intents_data = {
+    # }
+    # # Creating label mappings
+    # id2labelname, labelname2id = create_label_mappings(intents_data)
 
-        return model
-    
-    except Exception as e:
-        logging.error("Error training model: %s", e)
-        return None
+   
+
+    # Step 1: Read the JSON file
+    with open(r"C:\Mukesh\White Mastery\Training-Server\bin\training_data.json") as file:
+        intents_data = json.load(file)
+
+    # Step 2: Create label mappings
+    id2labelname, labelname2id = create_label_mappings(intents_data)
+
+# Rest of your code remains the same...
 
 
-def test_classifier(input_text: str):
-    """
-    Function to test a classifier model on a single input text.
+    # Preparing training data
+    training_data = prepare_training_data(intents_data)
+    train_texts, train_labels = preprocess_texts_and_labels(training_data, labelname2id)
 
-    Parameters:
-    input_text (str): The input text to be classified.
+    # Preparing test data
+    test_texts = ["i have told you so many times not to call me on this matter just get lost"]
+    test_labels = [4]
+    label_names, test_texts, test_labels = prepare_test_data(intents_data, test_texts, test_labels)
 
-    Returns:
-    dict: A dictionary containing the prediction results.
-    """
-    try:
-        # Initialize BERT tokenizer
-        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    # Splitting data into train and dev sets
+    train_texts, dev_texts, train_labels, dev_labels = train_test_split(train_texts, train_labels, test_size=0.1, shuffle=True, random_state=1)
 
-        # Tokenize input text
-        tokenized_text = tokenizer(input_text, padding=True, truncation=True, return_tensors="pt")
+    # Fine-tuning models
+    fine_tune_models(intents_data, ["bert-base-uncased"], train_texts, dev_texts, train_labels, dev_labels, test_texts, test_labels, id2labelname)
 
-        # Load pre-trained BERT model
-        model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=30)
-
-        # Make prediction
-        model.eval()  # Set model to evaluation mode
-        with torch.no_grad():
-            outputs = model(**tokenized_text)
-
-        # label_names = ["enquire", "confirm", "wrong number", "reschedule", "stop calling", "hold    call", "settlement options", 
-        #                "will not pay", "wrong information", "enquire legitimacy", "share details", "financial crisis", 
-        #                "raise dispute", "debt counselling", "paid already", "pay later", "pay now", "other options", 
-        #                "enquire amount", "non-monetary settlement", "explain debt", "escalation", "attorney", "meal plans", 
-        #                "vegetarian", "keto", "wholesome", "indian", "international", "arabic"]
-        
-        # predicted_label_index = torch.argmax(outputs.logits).item()
-        # predicted_label = label_names[predicted_label_index]
-
-        # logging.info("Predicted label: %s", predicted_label)
-
-        logging.info(outputs)
-
-        # return {"label":predicted_label}
-
-    except Exception as err:
-        logging.exception(err)
-        return str(err)
-
-# Main function
-def classifier_model():
-    try:
-        logging.info("Model Started executing")
-        # Load and preprocess data
-        train_data, test_data, label_map = load_and_preprocess_data("./training_data.json")
-        if train_data is None or test_data is None or label_map is None:
-            return
-        # Train the model
-        train_model(train_data)
-        logging.info("Model training completed successfully")
-        return {"Classifier":"Trained"}
-              
-    except Exception as e:
-        logging.error("An error occurred: %s", e)
-        return {"Classifier":"Failed"}
+    # Classifying text with models
+    classify_text_with_models("How can I help you?", ["bert-base-uncased"], label_names)
