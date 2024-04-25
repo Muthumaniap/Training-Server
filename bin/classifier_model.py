@@ -113,13 +113,7 @@ def classify_text_with_models(input_text, model_ids, label_names):
                 break
 
 if __name__ == "__main__":
-    # # Your intents_data here
-    # intents_data = {
-    # }
-    # # Creating label mappings
-    # id2labelname, labelname2id = create_label_mappings(intents_data)
-
-   
+ 
 
     # Step 1: Read the JSON file
     with open(r".\training_data.json") as file:
