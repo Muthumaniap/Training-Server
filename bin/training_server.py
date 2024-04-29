@@ -5,7 +5,7 @@ import javaproperties
 from flask import Flask, request
 from flask_socketio import SocketIO
 from global_variables import Globals
-from classifier_model import classifier_model, test_classifier
+from classifier_model import train_classifier_model, test_classifier_model
 
 # define the conf, data and log paths
 Globals.conf = os.path.dirname(os.path.realpath(__file__)).replace("bin", "conf")
@@ -19,13 +19,13 @@ app = Flask(__name__)
 Globals.socket_conn = socketapp = SocketIO(app)
 
 @app.get("/train")
-def model_status():
-    return classifier_model()
+def model_train_status():
+    return train_classifier_model()
 
 @app.get("/get-test")
 def model_test_status():
     input_text = request.args.get("data")
-    return test_classifier(input_text)
+    return test_classifier_model(input_text)
 
 if __name__ == "__main__":
     try:
