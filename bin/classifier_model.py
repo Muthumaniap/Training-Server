@@ -141,9 +141,7 @@ def test_model(input_text, model_id, label_names):
         top_k=None,
     )
     data = pipe(input_text)
-    for i in data[0]:
-        if i["label"] in label_names:
-            return i
+    return data[0]
 
 
 def test_classifier_model(input_text):
