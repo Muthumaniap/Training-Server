@@ -1,5 +1,7 @@
-/logs/
 /.idea/
 /.venv/
 /.vscode/
 __pycache__/
+
+/data/
+/logs/
