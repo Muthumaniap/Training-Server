@@ -92,9 +92,11 @@ def classify_text_with_models(input_text, model_id, label_names):
                     top_k=None)
     data = pipe(input_text)
     for i in data[0]:
+        # print(i, end='\t')
         if i['label'] in label_names:
-            print(i)
-            break
+            # print("Result : ", i)
+            return i
+            # break
 
 if __name__ == "__main__":
     # Step 1: Read the JSON file
@@ -120,7 +122,9 @@ if __name__ == "__main__":
     train_texts, dev_texts, train_labels, dev_labels = train_test_split(train_texts, train_labels, test_size=0.1, shuffle=True, random_state=1)
 
     # Fine-tuning models
-    fine_tune_models(intents_data, model_id, train_texts, dev_texts, train_labels, dev_labels, test_texts, test_labels, id2labelname)
+    # fine_tune_models(intents_data, model_id, train_texts, dev_texts, train_labels, dev_labels, test_texts, test_labels, id2labelname)
 
     # Classifying text with models
-    classify_text_with_models("How can I help you?", model_id, label_names)
+    results = classify_text_with_models("How can I help you?", model_id, label_names)
+    # pass the results to anywhere
+    print("Label predicted : ", results)
