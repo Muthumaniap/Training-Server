@@ -20,10 +20,25 @@ Globals.socket_conn = socketapp = SocketIO(app)
 
 @app.get("/train")
 def model_train_status():
+    """
+    Retrieves the current status of the model training process.
+    
+    Returns:
+        dict: A dictionary containing the status of the model training. The key is the model ID and the value is either "Trained" or "Failed".
+    """
     return train_classifier_model()
 
 @app.get("/get-test")
 def model_test_status():
+    """
+    Tests a classifier model using the provided input text.
+    
+    Args:
+        input_text (str): The text to be classified.
+        
+    Returns:
+        The classification result for the input text.
+    """
     input_text = request.args.get("data")
     return test_classifier_model(input_text)
 

@@ -33,6 +33,15 @@ class ClassificationDataset(torch.utils.data.Dataset):
 
 
 def prepare_training_data(intents_data):
+    """
+    Prepares the training data for the classifier model.
+
+    Args:
+        intents_data (dict): A dictionary containing the intents data.
+
+    Returns:
+        list: A list of dictionaries with "label" and "text" keys for each training data entry.
+    """
     logging.info("Preparing training data")
     training_data = []
     for label in intents_data:
@@ -43,6 +52,16 @@ def prepare_training_data(intents_data):
 
 
 def preprocess_texts_and_labels(training_data, labelname2id):
+    """
+    Preprocesses the texts and labels in the given training data.
+
+    Args:
+        training_data (list): A list of dictionaries representing the training data. Each dictionary should have "text" and "label" keys.
+        labelname2id (dict): A dictionary mapping label names to their corresponding IDs.
+
+    Returns:
+        tuple: A tuple containing two lists - train_texts and train_labels. train_texts contains the preprocessed texts from the training data, with punctuation removed and converted to lowercase. train_labels contains the corresponding labels converted to their respective IDs using the labelname2id dictionary.
+    """
     logging.info("Preprocessing texts and labels")
     train_texts = []
     train_labels = []
@@ -65,6 +84,23 @@ def train_model(
     test_labels,
     id2labelname,
 ):
+    """
+    Trains a model using the provided training data and saves the trained model and tokenizer.
+    
+    Args:
+        intents_data (dict): A dictionary containing the training data for each intent.
+        model_id (str): The ID of the model to be trained.
+        train_texts (list): A list of texts for training.
+        dev_texts (list): A list of texts for development.
+        train_labels (list): A list of labels for training.
+        dev_labels (list): A list of labels for development.
+        test_texts (list): A list of texts for testing.
+        test_labels (list): A list of labels for testing.
+        id2labelname (dict): A dictionary mapping label IDs to label names.
+        
+    Returns:
+        None
+    """
     logging.info("Training model: " + model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id, model_max_length=512)
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -123,6 +159,15 @@ def train_model(
 
 
 def compute_metrics(pred):
+    """
+    Computes the accuracy metrics based on the predicted and true labels.
+
+    Args:
+        pred: The prediction object containing label_ids and predictions.
+
+    Returns:
+        dictionary: A dictionary containing the accuracy value under the key "accuracy".
+    """
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
     acc = accuracy_score(labels, preds)
@@ -130,6 +175,17 @@ def compute_metrics(pred):
 
 
 def test_model(input_text, model_id, label_names):
+    """
+    Tests a model using the input text, model ID, and label names.
+
+    Args:
+        input_text (str): The text to be classified.
+        model_id (str): The ID of the model to be used for classification.
+        label_names (list): A list of label names for classification.
+
+    Returns:
+        The classification result for the input text.
+    """
     input_text = input_text.translate(str.maketrans("", "", string.punctuation)).lower()
     logging.info("Model name: " + model_id)
     pipe = pipeline(
@@ -145,6 +201,15 @@ def test_model(input_text, model_id, label_names):
 
 
 def test_classifier_model(input_text):
+    """
+    Tests a classifier model using the provided input text.
+    
+    Args:
+        input_text (str): The text to be classified.
+        
+    Returns:
+        The classification result for the input text.
+    """
     try:
         with open("./data/training_data.json") as file:
             intents_data = json.load(file)
@@ -162,6 +227,12 @@ def test_classifier_model(input_text):
 
 
 def train_classifier_model():
+    """
+    Trains a classifier model using the provided training data and saves the trained model and tokenizer.
+    
+    Returns:
+        dict: A dictionary containing the status of the model training. The key is the model ID and the value is either "Trained" or "Failed".
+    """
     try:
         logging.info("Entering Model Training")
         with open("data/training_data.json") as file:
